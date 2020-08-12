@@ -15,7 +15,7 @@ set(PERF_TEST_SOURCE
     src/track2_test.cc
 )
 
-add_library(perftest ${PERF_TEST_SOURCE})
+add_executable(perftest ${PERF_TEST_SOURCE})
 
 if(WIN32)
   target_compile_definitions(perftest PRIVATE NOMINMAX)

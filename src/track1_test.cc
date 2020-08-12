@@ -1,7 +1,9 @@
 #include "track1_test.h"
 
-#include <cassert>
 #include <atomic>
+#include <cassert>
+#include <iostream>
+#include <thread>
 
 #include "blob/blob_client.h"
 #include "mstream.h"
@@ -28,17 +30,36 @@ int track1_test_download(int64_t blobSize, int numBlobs, int concurrency)
   auto getPropertiesResult = client.get_blob_properties(containerName, blobName).get();
   if (!getPropertiesResult.success() || getPropertiesResult.response().size != blobSize)
   {
-    client.upload_block_blob_from_buffer(
-        containerName, blobName, blobContent.data(), {}, blobContent.length(), 1);
+    client.delete_blob(containerName, blobName);
+    auto ret = client
+                   .upload_block_blob_from_buffer(
+                       containerName, blobName, blobContent.data(), {}, blobContent.length(), 1)
+                   .get();
+    if (!ret.success())
+    {
+      std::cout << ret.error().code << std::endl;
+      std::cout << ret.error().code_name << std::endl;
+      std::cout << ret.error().message << std::endl;
+    }
   }
 
-  std::atomic<int> counter = numBlobs;
+  std::atomic<int> counter(numBlobs);
   auto threadFunc = [&]() {
-    while (counter.fetch_sub(1) > 0)
+    while (true)
     {
+      int i = counter.fetch_sub(1);
+      if (i <= 0)
+      {
+        break;
+      }
       omstream os(&blobContent[0], blobContent.size());
       auto ret = client.download_blob_to_stream(containerName, blobName, 0, blobSize, os).get();
-      assert(ret.success());
+      if (!ret.success())
+      {
+        std::cout << ret.error().code << std::endl;
+        std::cout << ret.error().code_name << std::endl;
+        std::cout << ret.error().message << std::endl;
+      }
     }
   };
 
@@ -71,13 +92,26 @@ int track1_test_upload(int64_t blobSize, int numBlobs, int concurrency)
 
   std::string blobName = blobNamePrefix + std::to_string(blobSize);
 
-  std::atomic<int> counter = numBlobs;
+  std::atomic<int> counter(numBlobs);
   auto threadFunc = [&]() {
-    while (counter.fetch_sub(1) > 0)
+    while (true)
     {
+      int i = counter.fetch_sub(1);
+      if (i <= 0)
+      {
+        break;
+      }
       imstream is(&blobContent[0], blobContent.size());
-      auto ret = client.upload_block_blob_from_stream(containerName, blobName, is, {}).get();
-      assert(ret.success());
+      auto ret = client
+                     .upload_block_blob_from_stream(
+                         containerName, blobName + "-" + std::to_string(i), is, {})
+                     .get();
+      if (!ret.success())
+      {
+        std::cout << ret.error().code << std::endl;
+        std::cout << ret.error().code_name << std::endl;
+        std::cout << ret.error().message << std::endl;
+      }
     }
   };
 

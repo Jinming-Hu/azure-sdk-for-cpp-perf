@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cassert>
+#include <thread>
 
 #include "blobs/blob.hpp"
 
@@ -39,10 +40,15 @@ int track2_test_download(int64_t blobSize, int numBlobs, int concurrency)
         reinterpret_cast<const uint8_t*>(blobContent.data()), blobContent.length());
   }
 
-  std::atomic<int> counter = numBlobs;
+  std::atomic<int> counter(numBlobs);
   auto threadFunc = [&]() {
-    while (counter.fetch_sub(1) > 0)
+    while (true)
     {
+      int i = counter.fetch_sub(1);
+      if (i <= 0)
+      {
+        break;
+      }
       DownloadBlobToBufferOptions options;
       options.InitialChunkSize = blobSize;
       options.ChunkSize = blobSize;
@@ -75,19 +81,24 @@ int track2_test_upload(int64_t blobSize, int numBlobs, int concurrency)
 
   std::string blobName = blobNamePrefix + std::to_string(blobSize);
 
-  auto client = BlockBlobClient(
-      std::string("https://") + accountName + ".blob.core.windows.net/" + containerName + "/"
-          + blobName,
-      cred);
-
   std::string blobContent;
   blobContent.resize(blobSize);
   FillBuffer(&blobContent[0], blobContent.size());
 
-  std::atomic<int> counter = numBlobs;
+  std::atomic<int> counter(numBlobs);
   auto threadFunc = [&]() {
-    while (counter.fetch_sub(1) > 0)
+    while (true)
     {
+      int i = counter.fetch_sub(1);
+      if (i <= 0)
+      {
+        break;
+      }
+      auto client = BlockBlobClient(
+          std::string("https://") + accountName + ".blob.core.windows.net/" + containerName + "/"
+              + blobName + "-" + std::to_string(i),
+          cred);
+
       UploadBlobOptions options;
       options.ChunkSize = blobSize;
       options.Concurrency = 1;

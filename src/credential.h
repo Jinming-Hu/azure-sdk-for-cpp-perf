@@ -4,8 +4,8 @@
 #include <intrin.h>
 #endif
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 
 constexpr static const char* accountName = "";
 constexpr static const char* accountKey = "";
