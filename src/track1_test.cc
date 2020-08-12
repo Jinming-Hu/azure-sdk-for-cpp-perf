@@ -44,7 +44,9 @@ int track1_test_download(int64_t blobSize, int numBlobs, int concurrency)
   }
 
   std::atomic<int> counter(numBlobs);
+  std::atomic<int> ms(0);
   auto threadFunc = [&]() {
+    auto start = std::chrono::steady_clock::now();
     while (true)
     {
       int i = counter.fetch_sub(1);
@@ -61,9 +63,10 @@ int track1_test_download(int64_t blobSize, int numBlobs, int concurrency)
         std::cout << ret.error().message << std::endl;
       }
     }
+    auto end = std::chrono::steady_clock::now();
+    ms.fetch_add(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
   };
 
-  auto start = std::chrono::steady_clock::now();
   std::vector<std::thread> ths;
   for (int i = 0; i < concurrency; ++i)
   {
@@ -73,8 +76,8 @@ int track1_test_download(int64_t blobSize, int numBlobs, int concurrency)
   {
     th.join();
   }
-  auto end = std::chrono::steady_clock::now();
-  return std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+  return ms.load() / concurrency;
 }
 
 int track1_test_upload(int64_t blobSize, int numBlobs, int concurrency)
@@ -93,7 +96,9 @@ int track1_test_upload(int64_t blobSize, int numBlobs, int concurrency)
   std::string blobName = blobNamePrefix + std::to_string(blobSize);
 
   std::atomic<int> counter(numBlobs);
+  std::atomic<int> ms(0);
   auto threadFunc = [&]() {
+    auto start = std::chrono::steady_clock::now();
     while (true)
     {
       int i = counter.fetch_sub(1);
@@ -113,9 +118,10 @@ int track1_test_upload(int64_t blobSize, int numBlobs, int concurrency)
         std::cout << ret.error().message << std::endl;
       }
     }
+    auto end = std::chrono::steady_clock::now();
+    ms.fetch_add(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
   };
 
-  auto start = std::chrono::steady_clock::now();
   std::vector<std::thread> ths;
   for (int i = 0; i < concurrency; ++i)
   {
@@ -125,6 +131,6 @@ int track1_test_upload(int64_t blobSize, int numBlobs, int concurrency)
   {
     th.join();
   }
-  auto end = std::chrono::steady_clock::now();
-  return std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+  return ms.load() / concurrency;
 }

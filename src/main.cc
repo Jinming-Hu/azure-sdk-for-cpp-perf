@@ -35,17 +35,17 @@ std::string SizeToString(std::size_t s)
   if (s % 1_GB == 0)
   {
     u = "-GiB";
-    s %= 1_GB;
+    s /= 1_GB;
   }
   else if (s % 1_MB == 0)
   {
     u = "-MiB";
-    s %= 1_MB;
+    s /= 1_MB;
   }
   else if (s % 1_KB == 0)
   {
     u = "-KiB";
-    s %= 1_KB;
+    s /= 1_KB;
   }
   return std::to_string(s) + u;
 }
@@ -53,7 +53,7 @@ std::string SizeToString(std::size_t s)
 int main(int argc, char** argv)
 {
   std::vector<TestConf> confs
-      = {{5, 30000, 32}, {10_KB, 5000, 32}, {10_MB, 500, 32}, {1_GB, 32, 8}};
+      = {{5, 50000, 32}, {10_KB, 50000, 32}, {10_MB, 1000, 32}, {1_GB, 16, 8}};
 
   std::vector<Suite> suites = {
       {"Track1 Upload", track1_test_upload},

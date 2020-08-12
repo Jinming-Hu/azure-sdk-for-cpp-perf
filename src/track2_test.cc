@@ -41,7 +41,9 @@ int track2_test_download(int64_t blobSize, int numBlobs, int concurrency)
   }
 
   std::atomic<int> counter(numBlobs);
+  std::atomic<int> ms(0);
   auto threadFunc = [&]() {
+    auto start = std::chrono::steady_clock::now();
     while (true)
     {
       int i = counter.fetch_sub(1);
@@ -56,9 +58,10 @@ int track2_test_download(int64_t blobSize, int numBlobs, int concurrency)
       client.DownloadToBuffer(
           reinterpret_cast<uint8_t*>(&blobContent[0]), blobContent.size(), options);
     }
+    auto end = std::chrono::steady_clock::now();
+    ms.fetch_add(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
   };
 
-  auto start = std::chrono::steady_clock::now();
   std::vector<std::thread> ths;
   for (int i = 0; i < concurrency; ++i)
   {
@@ -68,8 +71,8 @@ int track2_test_download(int64_t blobSize, int numBlobs, int concurrency)
   {
     th.join();
   }
-  auto end = std::chrono::steady_clock::now();
-  return std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+  return ms.load() / concurrency;
 }
 
 int track2_test_upload(int64_t blobSize, int numBlobs, int concurrency)
@@ -80,13 +83,17 @@ int track2_test_upload(int64_t blobSize, int numBlobs, int concurrency)
   auto cred = std::make_shared<SharedKeyCredential>(accountName, accountKey);
 
   std::string blobName = blobNamePrefix + std::to_string(blobSize);
+  auto containerClient = BlobContainerClient(
+      std::string("https://") + accountName + ".blob.core.windows.net/" + containerName, cred);
 
   std::string blobContent;
   blobContent.resize(blobSize);
   FillBuffer(&blobContent[0], blobContent.size());
 
   std::atomic<int> counter(numBlobs);
+  std::atomic<int> ms(0);
   auto threadFunc = [&]() {
+    auto start = std::chrono::steady_clock::now();
     while (true)
     {
       int i = counter.fetch_sub(1);
@@ -94,10 +101,7 @@ int track2_test_upload(int64_t blobSize, int numBlobs, int concurrency)
       {
         break;
       }
-      auto client = BlockBlobClient(
-          std::string("https://") + accountName + ".blob.core.windows.net/" + containerName + "/"
-              + blobName + "-" + std::to_string(i),
-          cred);
+      auto client = containerClient.GetBlockBlobClient(blobName + "-" + std::to_string(i));
 
       UploadBlobOptions options;
       options.ChunkSize = blobSize;
@@ -105,9 +109,10 @@ int track2_test_upload(int64_t blobSize, int numBlobs, int concurrency)
       client.UploadFromBuffer(
           reinterpret_cast<const uint8_t*>(blobContent.data()), blobContent.size(), options);
     }
+    auto end = std::chrono::steady_clock::now();
+    ms.fetch_add(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
   };
 
-  auto start = std::chrono::steady_clock::now();
   std::vector<std::thread> ths;
   for (int i = 0; i < concurrency; ++i)
   {
@@ -117,6 +122,5 @@ int track2_test_upload(int64_t blobSize, int numBlobs, int concurrency)
   {
     th.join();
   }
-  auto end = std::chrono::steady_clock::now();
-  return std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+  return ms.load() / concurrency;
 }
