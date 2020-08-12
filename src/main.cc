@@ -2,10 +2,12 @@
 #include "track1_test.h"
 #include "track2_test.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <functional>
 #include <iostream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -31,20 +33,20 @@ constexpr inline unsigned long long operator""_GB(unsigned long long x)
 
 std::string SizeToString(std::size_t s)
 {
-  std::string u = "-byte";
+  std::string u = "byte";
   if (s % 1_GB == 0)
   {
-    u = "-GiB";
+    u = "GiB";
     s /= 1_GB;
   }
   else if (s % 1_MB == 0)
   {
-    u = "-MiB";
+    u = "MiB";
     s /= 1_MB;
   }
   else if (s % 1_KB == 0)
   {
-    u = "-KiB";
+    u = "KiB";
     s /= 1_KB;
   }
   return std::to_string(s) + u;
@@ -53,7 +55,7 @@ std::string SizeToString(std::size_t s)
 int main(int argc, char** argv)
 {
   std::vector<TestConf> confs
-      = {{5, 50000, 32}, {10_KB, 50000, 32}, {10_MB, 1000, 32}, {1_GB, 16, 8}};
+      = {{5, 5000, 32}, {10_KB, 5000, 32}, {10_MB, 1000, 32}, {1_GB, 16, 8}, {1_GB, 64, 32}};
 
   std::vector<Suite> suites = {
       {"Track1 Upload", track1_test_upload},
@@ -68,11 +70,20 @@ int main(int argc, char** argv)
   int ce = confs.size();
   if (argc >= 2)
   {
-    ss = se = std::stoi(argv[1]);
+    ss = std::stoi(argv[1]);
+    se = ss + 1;
   }
   if (argc >= 3)
   {
-    cs = ce = std::stoi(argv[2]);
+    cs = std::stoi(argv[2]);
+    ce = cs + 1;
+  }
+
+  if (argc == 1)
+  {
+    std::random_device rd{};
+    auto rng = std::default_random_engine{rd()};
+    std::shuffle(suites.begin(), suites.end(), rng);
   }
 
   for (int i = ss; i < se; ++i)
