@@ -124,3 +124,79 @@ int track2_test_upload(int64_t blobSize, int numBlobs, int concurrency)
   }
   return ms.load() / concurrency;
 }
+
+int track2_test_blocks_download(int64_t blockSize, int numBlocks, int concurrency)
+{
+  using namespace Azure::Storage;
+  using namespace Azure::Storage::Blobs;
+
+  auto cred = std::make_shared<SharedKeyCredential>(accountName, accountKey);
+
+  std::string blobName
+      = blobNamePrefix + std::to_string(blockSize) + "*" + std::to_string(numBlocks);
+
+  auto client = BlockBlobClient(
+      std::string("https://") + accountName + ".blob.core.windows.net/" + containerName + "/"
+          + blobName,
+      cred);
+
+  std::string blobContent;
+  blobContent.resize(blockSize * numBlocks);
+  FillBuffer(&blobContent[0], blobContent.size());
+
+  try
+  {
+    auto getPropertiesResult = client.GetProperties();
+    if (getPropertiesResult->ContentLength != blockSize * numBlocks)
+    {
+      throw std::runtime_error("");
+    }
+  }
+  catch (std::runtime_error&)
+  {
+    client.UploadFromBuffer(
+        reinterpret_cast<const uint8_t*>(blobContent.data()), blobContent.length());
+  }
+
+  DownloadBlobToBufferOptions options;
+  options.InitialChunkSize = blockSize;
+  options.ChunkSize = blockSize;
+  options.Concurrency = concurrency;
+  auto start = std::chrono::steady_clock::now();
+  client.DownloadToBuffer(reinterpret_cast<uint8_t*>(&blobContent[0]), blobContent.size(), options);
+  auto end = std::chrono::steady_clock::now();
+  int ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+  return ms;
+}
+
+int track2_test_blocks_upload(int64_t blockSize, int numBlocks, int concurrency)
+{
+  using namespace Azure::Storage;
+  using namespace Azure::Storage::Blobs;
+
+  auto cred = std::make_shared<SharedKeyCredential>(accountName, accountKey);
+
+  std::string blobName
+      = blobNamePrefix + std::to_string(blockSize) + "*" + std::to_string(numBlocks);
+
+  auto client = BlockBlobClient(
+      std::string("https://") + accountName + ".blob.core.windows.net/" + containerName + "/"
+          + blobName,
+      cred);
+
+  std::string blobContent;
+  blobContent.resize(blockSize * numBlocks);
+  FillBuffer(&blobContent[0], blobContent.size());
+
+  UploadBlobOptions options;
+  options.ChunkSize = blockSize;
+  options.Concurrency = concurrency;
+  auto start = std::chrono::steady_clock::now();
+  client.UploadFromBuffer(
+      reinterpret_cast<const uint8_t*>(blobContent.data()), blobContent.size(), options);
+  auto end = std::chrono::steady_clock::now();
+  int ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+  return ms;
+}
