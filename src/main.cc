@@ -109,5 +109,30 @@ int main(int argc, char** argv)
     }
   }
 
+  TestConf blocksConf = {10_MB, 1000, 32};
+
+  std::vector<Suite> blocksSuites = {
+      {"Track2 Blocks Upload", track2_test_blocks_upload},
+      {"Track2 Blocks Download", track2_test_blocks_download},
+  };
+
+  if (argc == 1)
+  {
+    for (const auto& suite : blocksSuites)
+    {
+      printf("%s:\n", suite.name.data());
+      printf(
+          "    Transfer %d %s blocks with %d threads\n",
+          blocksConf.numBlobs,
+          SizeToString(blocksConf.blobSize).data(),
+          blocksConf.concurrency);
+
+      int ms = suite.func(blocksConf.blobSize, blocksConf.numBlobs, blocksConf.concurrency);
+      double mbps
+          = static_cast<double>(blocksConf.numBlobs * blocksConf.blobSize) / 1_MB / ms * 1000;
+      double tps = static_cast<double>(blocksConf.numBlobs) / ms * 1000;
+      printf("    %d ms, %lf MiB/s, %lf op/s\n", ms, mbps, tps);
+    }
+  }
   return 0;
 }
