@@ -36,8 +36,7 @@ int track2_test_download(int64_t blobSize, int numBlobs, int concurrency)
   }
   catch (std::runtime_error&)
   {
-    client.UploadFromBuffer(
-        reinterpret_cast<const uint8_t*>(blobContent.data()), blobContent.length());
+    client.UploadFrom(reinterpret_cast<const uint8_t*>(blobContent.data()), blobContent.length());
   }
 
   std::atomic<int> counter(numBlobs);
@@ -51,12 +50,11 @@ int track2_test_download(int64_t blobSize, int numBlobs, int concurrency)
       {
         break;
       }
-      DownloadBlobToBufferOptions options;
+      DownloadBlobToOptions options;
       options.InitialChunkSize = blobSize;
       options.ChunkSize = blobSize;
       options.Concurrency = 1;
-      client.DownloadToBuffer(
-          reinterpret_cast<uint8_t*>(&blobContent[0]), blobContent.size(), options);
+      client.DownloadTo(reinterpret_cast<uint8_t*>(&blobContent[0]), blobContent.size(), options);
     }
     auto end = std::chrono::steady_clock::now();
     ms.fetch_add(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
@@ -103,10 +101,10 @@ int track2_test_upload(int64_t blobSize, int numBlobs, int concurrency)
       }
       auto client = containerClient.GetBlockBlobClient(blobName + "-" + std::to_string(i));
 
-      UploadBlobOptions options;
+      UploadBlockBlobFromOptions options;
       options.ChunkSize = blobSize;
       options.Concurrency = 1;
-      client.UploadFromBuffer(
+      client.UploadFrom(
           reinterpret_cast<const uint8_t*>(blobContent.data()), blobContent.size(), options);
     }
     auto end = std::chrono::steady_clock::now();
@@ -154,16 +152,15 @@ int track2_test_blocks_download(int64_t blockSize, int numBlocks, int concurrenc
   }
   catch (std::runtime_error&)
   {
-    client.UploadFromBuffer(
-        reinterpret_cast<const uint8_t*>(blobContent.data()), blobContent.length());
+    client.UploadFrom(reinterpret_cast<const uint8_t*>(blobContent.data()), blobContent.length());
   }
 
-  DownloadBlobToBufferOptions options;
+  DownloadBlobToOptions options;
   options.InitialChunkSize = blockSize;
   options.ChunkSize = blockSize;
   options.Concurrency = concurrency;
   auto start = std::chrono::steady_clock::now();
-  client.DownloadToBuffer(reinterpret_cast<uint8_t*>(&blobContent[0]), blobContent.size(), options);
+  client.DownloadTo(reinterpret_cast<uint8_t*>(&blobContent[0]), blobContent.size(), options);
   auto end = std::chrono::steady_clock::now();
   int ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
@@ -189,11 +186,11 @@ int track2_test_blocks_upload(int64_t blockSize, int numBlocks, int concurrency)
   blobContent.resize(blockSize * numBlocks);
   FillBuffer(&blobContent[0], blobContent.size());
 
-  UploadBlobOptions options;
+  UploadBlockBlobFromOptions options;
   options.ChunkSize = blockSize;
   options.Concurrency = concurrency;
   auto start = std::chrono::steady_clock::now();
-  client.UploadFromBuffer(
+  client.UploadFrom(
       reinterpret_cast<const uint8_t*>(blobContent.data()), blobContent.size(), options);
   auto end = std::chrono::steady_clock::now();
   int ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
