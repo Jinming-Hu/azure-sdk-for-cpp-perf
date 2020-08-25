@@ -109,6 +109,7 @@ int main(int argc, char** argv)
     }
   }
 
+  /*
   TestConf blocksConf = {10_MB, 1000, 32};
 
   std::vector<Suite> blocksSuites = {
@@ -134,5 +135,6 @@ int main(int argc, char** argv)
       printf("    %d ms, %lf MiB/s, %lf op/s\n", ms, mbps, tps);
     }
   }
+  */
   return 0;
 }
