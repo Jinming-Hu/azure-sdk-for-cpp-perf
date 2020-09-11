@@ -4,7 +4,7 @@
 #include <cassert>
 #include <thread>
 
-#include "blobs/blob.hpp"
+#include "azure/storage/blobs/blob.hpp"
 
 #include "credential.h"
 

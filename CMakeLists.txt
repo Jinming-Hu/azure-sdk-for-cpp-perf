@@ -21,4 +21,4 @@ if(WIN32)
   target_compile_definitions(perftest PRIVATE NOMINMAX)
 endif()
 
-target_link_libraries(perftest azure-storage-lite azure::storage::blob)
+target_link_libraries(perftest azure-storage-lite azure::storage::blobs)
