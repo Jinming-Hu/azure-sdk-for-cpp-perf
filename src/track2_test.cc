@@ -17,10 +17,13 @@ int track2_test_download(int64_t blobSize, int numBlobs, int concurrency)
 
   std::string blobName = blobNamePrefix + std::to_string(blobSize);
 
+  BlockBlobClientOptions clientOptions;
+  clientOptions.RetryOptions.MaxRetries = 0;
   auto client = BlockBlobClient(
       std::string("https://") + accountName + ".blob.core.windows.net/" + containerName + "/"
           + blobName,
-      cred);
+      cred,
+      clientOptions);
 
   std::string blobContent;
   blobContent.resize(blobSize);
@@ -81,8 +84,12 @@ int track2_test_upload(int64_t blobSize, int numBlobs, int concurrency)
   auto cred = std::make_shared<SharedKeyCredential>(accountName, accountKey);
 
   std::string blobName = blobNamePrefix + std::to_string(blobSize);
+  BlobContainerClientOptions clientOptions;
+  clientOptions.RetryOptions.MaxRetries = 0;
   auto containerClient = BlobContainerClient(
-      std::string("https://") + accountName + ".blob.core.windows.net/" + containerName, cred);
+      std::string("https://") + accountName + ".blob.core.windows.net/" + containerName,
+      cred,
+      clientOptions);
 
   std::string blobContent;
   blobContent.resize(blobSize);
@@ -133,10 +140,13 @@ int track2_test_blocks_download(int64_t blockSize, int numBlocks, int concurrenc
   std::string blobName
       = blobNamePrefix + std::to_string(blockSize) + "*" + std::to_string(numBlocks);
 
+  BlockBlobClientOptions clientOptions;
+  clientOptions.RetryOptions.MaxRetries = 0;
   auto client = BlockBlobClient(
       std::string("https://") + accountName + ".blob.core.windows.net/" + containerName + "/"
           + blobName,
-      cred);
+      cred,
+      clientOptions);
 
   std::string blobContent;
   blobContent.resize(blockSize * numBlocks);
@@ -177,10 +187,13 @@ int track2_test_blocks_upload(int64_t blockSize, int numBlocks, int concurrency)
   std::string blobName
       = blobNamePrefix + std::to_string(blockSize) + "*" + std::to_string(numBlocks);
 
+  BlockBlobClientOptions clientOptions;
+  clientOptions.RetryOptions.MaxRetries = 0;
   auto client = BlockBlobClient(
       std::string("https://") + accountName + ".blob.core.windows.net/" + containerName + "/"
           + blobName,
-      cred);
+      cred,
+      clientOptions);
 
   std::string blobContent;
   blobContent.resize(blockSize * numBlocks);
