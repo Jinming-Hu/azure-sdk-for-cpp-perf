@@ -4,7 +4,7 @@
 #include <cassert>
 #include <thread>
 
-#include "azure/storage/blobs/blob.hpp"
+#include "azure/storage/blobs.hpp"
 
 #include "credential.h"
 
@@ -13,11 +13,11 @@ int track2_test_download(int64_t blobSize, int numBlobs, int concurrency)
   using namespace Azure::Storage;
   using namespace Azure::Storage::Blobs;
 
-  auto cred = std::make_shared<SharedKeyCredential>(accountName, accountKey);
+  auto cred = std::make_shared<StorageSharedKeyCredential>(accountName, accountKey);
 
   std::string blobName = blobNamePrefix + std::to_string(blobSize);
 
-  BlockBlobClientOptions clientOptions;
+  BlobClientOptions clientOptions;
   clientOptions.RetryOptions.MaxRetries = 0;
   auto client = BlockBlobClient(
       std::string("https://") + accountName + ".blob.core.windows.net/" + containerName + "/"
@@ -81,10 +81,10 @@ int track2_test_upload(int64_t blobSize, int numBlobs, int concurrency)
   using namespace Azure::Storage;
   using namespace Azure::Storage::Blobs;
 
-  auto cred = std::make_shared<SharedKeyCredential>(accountName, accountKey);
+  auto cred = std::make_shared<StorageSharedKeyCredential>(accountName, accountKey);
 
   std::string blobName = blobNamePrefix + std::to_string(blobSize);
-  BlobContainerClientOptions clientOptions;
+  BlobClientOptions clientOptions;
   clientOptions.RetryOptions.MaxRetries = 0;
   auto containerClient = BlobContainerClient(
       std::string("https://") + accountName + ".blob.core.windows.net/" + containerName,
@@ -135,12 +135,12 @@ int track2_test_blocks_download(int64_t blockSize, int numBlocks, int concurrenc
   using namespace Azure::Storage;
   using namespace Azure::Storage::Blobs;
 
-  auto cred = std::make_shared<SharedKeyCredential>(accountName, accountKey);
+  auto cred = std::make_shared<StorageSharedKeyCredential>(accountName, accountKey);
 
   std::string blobName
       = blobNamePrefix + std::to_string(blockSize) + "*" + std::to_string(numBlocks);
 
-  BlockBlobClientOptions clientOptions;
+  BlobClientOptions clientOptions;
   clientOptions.RetryOptions.MaxRetries = 0;
   auto client = BlockBlobClient(
       std::string("https://") + accountName + ".blob.core.windows.net/" + containerName + "/"
@@ -182,12 +182,12 @@ int track2_test_blocks_upload(int64_t blockSize, int numBlocks, int concurrency)
   using namespace Azure::Storage;
   using namespace Azure::Storage::Blobs;
 
-  auto cred = std::make_shared<SharedKeyCredential>(accountName, accountKey);
+  auto cred = std::make_shared<StorageSharedKeyCredential>(accountName, accountKey);
 
   std::string blobName
       = blobNamePrefix + std::to_string(blockSize) + "*" + std::to_string(numBlocks);
 
-  BlockBlobClientOptions clientOptions;
+  BlobClientOptions clientOptions;
   clientOptions.RetryOptions.MaxRetries = 0;
   auto client = BlockBlobClient(
       std::string("https://") + accountName + ".blob.core.windows.net/" + containerName + "/"
