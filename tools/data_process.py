@@ -2,6 +2,7 @@
 
 import fileinput
 import parse
+import statistics
 
 suites = {}
 
@@ -30,24 +31,34 @@ for line in fileinput.input():
         suites[suite_name] = {}
     if case_name not in suites[suite_name]:
         suites[suite_name][case_name] = {}
-        suites[suite_name][case_name]["numres"] = 0
-        suites[suite_name][case_name]["ms"] = 0.0
-        suites[suite_name][case_name]["mbps"] = 0.0
-        suites[suite_name][case_name]["opps"] = 0.0
-    suites[suite_name][case_name]["numres"] += 1
-    suites[suite_name][case_name]["ms"] += time_ms
-    suites[suite_name][case_name]["mbps"] += mbps
-    suites[suite_name][case_name]["opps"] += opps
+        suites[suite_name][case_name]["ms"] = list()
+        suites[suite_name][case_name]["mbps"] = list()
+        suites[suite_name][case_name]["opps"] = list()
+    suites[suite_name][case_name]["ms"].append(time_ms)
+    suites[suite_name][case_name]["mbps"].append(mbps)
+    suites[suite_name][case_name]["opps"].append(opps)
 
     case_name = str()
 
 for suite_name in suites:
     print(suite_name)
     for case_name in suites[suite_name]:
-        numres = suites[suite_name][case_name]["numres"]
+        l = suites[suite_name][case_name]
+        numres = len(l["ms"])
         print("    " + case_name + "(average of {})".format(numres))
-        ms = suites[suite_name][case_name]["ms"] / numres
-        mbps = suites[suite_name][case_name]["mbps"] / numres
-        opps = suites[suite_name][case_name]["opps"] / numres
-        print("    " + "{} ms, {} MiB/s, {} op/s".format(ms, mbps, opps))
+        ms_avg = statistics.mean(l["ms"])
+        ms_stdev = statistics.stdev(l["ms"]) / ms_avg
+        mbps_avg = statistics.mean(l["mbps"])
+        mbps_stdev = statistics.stdev(l["mbps"]) / mbps_avg
+        opps_avg = statistics.mean(l["opps"])
+        opps_stdev = statistics.stdev(l["opps"]) / opps_avg
+
+        ms_avg = float("%.4g" % ms_avg)
+        ms_stdev = float("%.4g" % ms_stdev)
+        mbps_avg = float("%.4g" % mbps_avg)
+        mbps_stdev = float("%.4g" % mbps_stdev)
+        opps_avg = float("%.4g" % opps_avg)
+        opps_stdev = float("%.4g" % opps_stdev)
+
+        print("    " + "{} ms ({}), {} MiB/s ({}), {} op/s ({})".format(ms_avg, ms_stdev, mbps_avg, mbps_stdev, opps_avg, opps_stdev))
 
