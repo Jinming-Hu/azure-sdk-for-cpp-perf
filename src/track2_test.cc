@@ -18,7 +18,7 @@ int track2_test_download(int64_t blobSize, int numBlobs, int concurrency)
   std::string blobName = blobNamePrefix + std::to_string(blobSize);
 
   BlobClientOptions clientOptions;
-  clientOptions.RetryOptions.MaxRetries = 0;
+  clientOptions.Retry.MaxRetries = 0;
   auto client = BlockBlobClient(
       std::string("https://") + accountName + ".blob.core.windows.net/" + containerName + "/"
           + blobName,
@@ -32,7 +32,7 @@ int track2_test_download(int64_t blobSize, int numBlobs, int concurrency)
   try
   {
     auto getPropertiesResult = client.GetProperties();
-    if (getPropertiesResult->ContentLength != blobSize)
+    if (getPropertiesResult.Value.BlobSize != blobSize)
     {
       throw std::runtime_error("");
     }
@@ -54,9 +54,9 @@ int track2_test_download(int64_t blobSize, int numBlobs, int concurrency)
         break;
       }
       DownloadBlobToOptions options;
-      options.InitialChunkSize = blobSize;
-      options.ChunkSize = blobSize;
-      options.Concurrency = 1;
+      options.TransferOptions.InitialChunkSize = blobSize;
+      options.TransferOptions.ChunkSize = blobSize;
+      options.TransferOptions.Concurrency = 1;
       client.DownloadTo(reinterpret_cast<uint8_t*>(&blobContent[0]), blobContent.size(), options);
     }
     auto end = std::chrono::steady_clock::now();
@@ -85,7 +85,7 @@ int track2_test_upload(int64_t blobSize, int numBlobs, int concurrency)
 
   std::string blobName = blobNamePrefix + std::to_string(blobSize);
   BlobClientOptions clientOptions;
-  clientOptions.RetryOptions.MaxRetries = 0;
+  clientOptions.Retry.MaxRetries = 0;
   auto containerClient = BlobContainerClient(
       std::string("https://") + accountName + ".blob.core.windows.net/" + containerName,
       cred,
@@ -109,8 +109,8 @@ int track2_test_upload(int64_t blobSize, int numBlobs, int concurrency)
       auto client = containerClient.GetBlockBlobClient(blobName + "-" + std::to_string(i));
 
       UploadBlockBlobFromOptions options;
-      options.ChunkSize = blobSize;
-      options.Concurrency = 1;
+      options.TransferOptions.ChunkSize = blobSize;
+      options.TransferOptions.Concurrency = 1;
       client.UploadFrom(
           reinterpret_cast<const uint8_t*>(blobContent.data()), blobContent.size(), options);
     }
@@ -141,7 +141,7 @@ int track2_test_blocks_download(int64_t blockSize, int numBlocks, int concurrenc
       = blobNamePrefix + std::to_string(blockSize) + "*" + std::to_string(numBlocks);
 
   BlobClientOptions clientOptions;
-  clientOptions.RetryOptions.MaxRetries = 0;
+  clientOptions.Retry.MaxRetries = 0;
   auto client = BlockBlobClient(
       std::string("https://") + accountName + ".blob.core.windows.net/" + containerName + "/"
           + blobName,
@@ -155,7 +155,7 @@ int track2_test_blocks_download(int64_t blockSize, int numBlocks, int concurrenc
   try
   {
     auto getPropertiesResult = client.GetProperties();
-    if (getPropertiesResult->ContentLength != blockSize * numBlocks)
+    if (getPropertiesResult.Value.BlobSize != blockSize * numBlocks)
     {
       throw std::runtime_error("");
     }
@@ -166,9 +166,9 @@ int track2_test_blocks_download(int64_t blockSize, int numBlocks, int concurrenc
   }
 
   DownloadBlobToOptions options;
-  options.InitialChunkSize = blockSize;
-  options.ChunkSize = blockSize;
-  options.Concurrency = concurrency;
+  options.TransferOptions.InitialChunkSize = blockSize;
+  options.TransferOptions.ChunkSize = blockSize;
+  options.TransferOptions.Concurrency = concurrency;
   auto start = std::chrono::steady_clock::now();
   client.DownloadTo(reinterpret_cast<uint8_t*>(&blobContent[0]), blobContent.size(), options);
   auto end = std::chrono::steady_clock::now();
@@ -188,7 +188,7 @@ int track2_test_blocks_upload(int64_t blockSize, int numBlocks, int concurrency)
       = blobNamePrefix + std::to_string(blockSize) + "*" + std::to_string(numBlocks);
 
   BlobClientOptions clientOptions;
-  clientOptions.RetryOptions.MaxRetries = 0;
+  clientOptions.Retry.MaxRetries = 0;
   auto client = BlockBlobClient(
       std::string("https://") + accountName + ".blob.core.windows.net/" + containerName + "/"
           + blobName,
@@ -200,8 +200,8 @@ int track2_test_blocks_upload(int64_t blockSize, int numBlocks, int concurrency)
   FillBuffer(&blobContent[0], blobContent.size());
 
   UploadBlockBlobFromOptions options;
-  options.ChunkSize = blockSize;
-  options.Concurrency = concurrency;
+  options.TransferOptions.ChunkSize = blockSize;
+  options.TransferOptions.Concurrency = concurrency;
   auto start = std::chrono::steady_clock::now();
   client.UploadFrom(
       reinterpret_cast<const uint8_t*>(blobContent.data()), blobContent.size(), options);
