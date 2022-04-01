@@ -1,6 +1,6 @@
 [submodule "azure-storage-cpplite"]
 	path = azure-storage-cpplite
-	url = git@github.com:Azure/azure-storage-cpplite.git
+	url = https://github.com/Azure/azure-storage-cpplite
 [submodule "azure-sdk-for-cpp"]
 	path = azure-sdk-for-cpp
-	url = git@github.com:Azure/azure-sdk-for-cpp.git
+	url = https://github.com/Azure/azure-sdk-for-cpp
