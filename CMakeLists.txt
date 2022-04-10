@@ -10,7 +10,7 @@ unset(ENV{VCPKG_ROOT})
 include(automate-vcpkg)
 
 vcpkg_bootstrap()
-vcpkg_install_packages(curl spdlog nlohmann-json)
+vcpkg_install_packages(libxml2 curl spdlog nlohmann-json)
 
 FetchContent_Declare(
   azure-core
