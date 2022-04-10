@@ -14,7 +14,7 @@
 struct benchmark_case
 {
   transfer_configuration transfer_config;
-  std::shared_ptr<transport> transport;
+  std::shared_ptr<::transport> transport;
   std::shared_ptr<case_base> func;
 };
 
@@ -104,7 +104,7 @@ int main()
       }
     }
   }
-  for (int i = 0; i < transfer_configs.size(); ++i)
+  for (size_t i = 0; i < transfer_configs.size(); ++i)
   {
     const auto& c = transfer_configs[i];
     spdlog::info(

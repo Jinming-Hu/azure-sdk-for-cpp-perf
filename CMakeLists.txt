@@ -90,6 +90,7 @@ FetchContent_Declare(
   URL https://codeload.github.com/Azure/azure-storage-cpplite/zip/refs/heads/master
 )
 FetchContent_MakeAvailable(azure-storage-cpplite)
+target_compile_options(azure-storage-lite PRIVATE -Wno-error)
 file(READ ${azure-storage-cpplite_SOURCE_DIR}/include/constants.dat filedata)
 string(
   REGEX

@@ -1,5 +1,3 @@
-#pragma once
-
 #include "cases.hh"
 
 #include <atomic>
