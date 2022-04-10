@@ -13,6 +13,7 @@
 #include <numeric>
 #include <set>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 #include <azure/core/http/curl_transport.hpp>
@@ -99,15 +100,21 @@ void validate_azure_vm()
     Azure::Core::Http::CurlTransportOptions transport_options;
     transport_options.Proxy = "";
     Azure::Core::Http::CurlTransport curl_transport(transport_options);
-    auto response_body_binary
-        = curl_transport.Send(request, Azure::Core::Context::ApplicationContext)->GetBody();
+    auto response = curl_transport.Send(request, Azure::Core::Context::ApplicationContext);
+    auto response_body_binary = response->GetBody();
     std::string json_body(response_body_binary.begin(), response_body_binary.end());
-    if (!json_body.empty())
+    if (json_body.empty())
     {
-      auto json_object = nlohmann::json::parse(json_body);
-      std::string resource_id = json_object["compute"]["resourceId"];
-      spdlog::info("Azure VM resource ID: {}", resource_id);
+      throw std::runtime_error(
+          "failed to get response from Azure Instance Metadata Service, "
+          + std::to_string(
+              static_cast<typename std::underlying_type<Azure::Core::Http::HttpStatusCode>::type>(
+                  response->GetStatusCode()))
+          + response->GetReasonPhrase());
     }
+    auto json_object = nlohmann::json::parse(json_body);
+    std::string resource_id = json_object["compute"]["resourceId"];
+    spdlog::info("Azure VM resource ID: {}", resource_id);
   }
   catch (std::exception& e)
   {
