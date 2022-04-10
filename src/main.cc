@@ -38,7 +38,10 @@ void perform(const std::vector<benchmark_case>& benchmark_cases)
       auto transfer_result = (*casei.func)(*casei.transport, casei.transfer_config);
       if (transfer_result.exception_observed)
       {
-        spdlog::warn("exception observed, sleep {} seconds", exception_sleep_seconds);
+        spdlog::warn(
+            "exception observed with {}, sleep {} seconds",
+            casei.transport->name,
+            exception_sleep_seconds);
         std::this_thread::sleep_for(std::chrono::seconds(exception_sleep_seconds));
         continue;
       }
