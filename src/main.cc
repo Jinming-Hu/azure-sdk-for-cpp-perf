@@ -76,11 +76,11 @@ int main()
   validate_azure_vm();
 
   std::vector<transfer_configuration> transfer_configs;
-  transfer_configs.push_back({5, 5000, 32});
-  transfer_configs.push_back({10_KB, 5000, 32});
+  transfer_configs.push_back({5, 10000, 32});
+  transfer_configs.push_back({10_KB, 10000, 32});
   transfer_configs.push_back({10_MB, 1000, 32});
-  transfer_configs.push_back({1_GB, 16, 8});
-  transfer_configs.push_back({1_GB, 64, 32});
+  transfer_configs.push_back({1_GB, 32, 8});
+  transfer_configs.push_back({1_GB, 128, 32});
 
   std::vector<std::shared_ptr<transport>> transports;
   transports.push_back(std::make_shared<cpplite_transport>());
