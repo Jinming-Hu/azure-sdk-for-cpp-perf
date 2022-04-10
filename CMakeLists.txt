@@ -6,7 +6,6 @@ project(azure-sdk-for-cpp-perf)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake-modules")
 
 include(FetchContent)
-unset(ENV{VCPKG_ROOT})
 include(automate-vcpkg)
 
 vcpkg_bootstrap()
