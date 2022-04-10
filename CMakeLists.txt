@@ -9,7 +9,7 @@ include(FetchContent)
 include(automate-vcpkg)
 
 vcpkg_bootstrap()
-vcpkg_install_packages(libxml2 curl spdlog nlohmann-json)
+vcpkg_install_packages(libxml2 curl spdlog nlohmann-json cryptopp)
 
 FetchContent_Declare(
   azure-core
@@ -144,7 +144,13 @@ target_compile_definitions(
 find_package(CURL CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(cryptopp CONFIG REQUIRED)
 
 target_link_libraries(
-  perftest CURL::libcurl spdlog::spdlog nlohmann_json::nlohmann_json
-  azure-storage-lite Azure::azure-storage-blobs)
+  perftest
+  CURL::libcurl
+  spdlog::spdlog
+  nlohmann_json::nlohmann_json
+  cryptopp-static
+  azure-storage-lite
+  Azure::azure-storage-blobs)

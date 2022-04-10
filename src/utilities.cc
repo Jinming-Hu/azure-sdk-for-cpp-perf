@@ -4,7 +4,9 @@
 #include <intrin.h>
 #endif
 
+#include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <cstddef>
 #include <cstring>
@@ -18,9 +20,11 @@
 
 #include <azure/core/http/curl_transport.hpp>
 #include <azure/core/http/http.hpp>
-#include <azure/core/internal/cryptography/sha_hash.hpp>
 #include <azure/storage/blobs.hpp>
 #include <azure/storage/common/storage_credential.hpp>
+#include <cryptopp/cryptlib.h>
+#include <cryptopp/hex.h>
+#include <cryptopp/sha.h>
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
 #include <spdlog/sinks/base_sink.h>
@@ -242,14 +246,20 @@ logger_raii::logger_raii()
                                       .ToString(
                                           Azure::DateTime::DateFormat::Rfc3339,
                                           Azure::DateTime::TimeFractionFormat::Truncate);
-    const std::vector<uint8_t> hash = Azure::Core::Cryptography::_internal::Sha256Hash().Final(
-        reinterpret_cast<const uint8_t*>(timestamp.data()), timestamp.length());
-    const std::string hash_hex = std::accumulate(
-        hash.begin(), hash.end(), std::string(), [](const std::string& lhs, uint8_t rhs) {
-          static const char t[16]
-              = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
-          return lhs + t[rhs >> 4] + t[rhs & 0x0f];
-        });
+    const std::string hash_hex = [](const std::string& data) {
+      CryptoPP::SHA1 hash;
+      hash.Update(reinterpret_cast<const CryptoPP::byte*>(data.data()), data.length());
+      std::string digest;
+      digest.resize(hash.DigestSize());
+      hash.Final(reinterpret_cast<CryptoPP::byte*>(&digest[0]));
+      CryptoPP::HexEncoder encoder(nullptr, false);
+      encoder.Put(reinterpret_cast<const CryptoPP::byte*>(&digest[0]), digest.length());
+      encoder.MessageEnd();
+      std::string hex;
+      hex.resize(encoder.MaxRetrievable());
+      encoder.Get(reinterpret_cast<CryptoPP::byte*>(&hex[0]), hex.size());
+      return hex;
+    }(timestamp);
     m_log_filename = timestamp + "-" + hash_hex.substr(0, 7) + ".log";
 
     auto azure_storage_sink = std::make_shared<azure_storage_sink_mt>();
