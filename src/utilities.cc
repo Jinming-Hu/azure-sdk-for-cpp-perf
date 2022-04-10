@@ -110,7 +110,7 @@ void validate_azure_vm()
           + std::to_string(
               static_cast<typename std::underlying_type<Azure::Core::Http::HttpStatusCode>::type>(
                   response->GetStatusCode()))
-          + response->GetReasonPhrase());
+          + " " + response->GetReasonPhrase());
     }
     auto json_object = nlohmann::json::parse(json_body);
     std::string resource_id = json_object["compute"]["resourceId"];
