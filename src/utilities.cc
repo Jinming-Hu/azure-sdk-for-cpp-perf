@@ -21,7 +21,6 @@
 #include <azure/core/http/curl_transport.hpp>
 #include <azure/core/http/http.hpp>
 #include <azure/storage/blobs.hpp>
-#include <azure/storage/common/storage_credential.hpp>
 #include <cryptopp/cryptlib.h>
 #include <cryptopp/hex.h>
 #include <cryptopp/sha.h>
@@ -131,14 +130,53 @@ void validate_azure_vm()
   }
 }
 
+namespace {
+const std::map<std::string, std::string>& connecetion_string_to_map()
+{
+  static std::map<std::string, std::string> connection_string_map = []() {
+    std::map<std::string, std::string> m;
+    const std::string str(connection_string);
+    std::string::const_iterator cur = str.begin();
+
+    while (cur != str.end())
+    {
+      auto key_begin = cur;
+      auto key_end = std::find(cur, str.end(), '=');
+      std::string key = std::string(key_begin, key_end);
+      cur = key_end;
+      if (cur != str.end())
+      {
+        ++cur;
+      }
+
+      auto value_begin = cur;
+      auto value_end = std::find(cur, str.end(), ';');
+      std::string value = std::string(value_begin, value_end);
+      cur = value_end;
+      if (cur != str.end())
+      {
+        ++cur;
+      }
+
+      if (!key.empty() || !value.empty())
+      {
+        m[std::move(key)] = std::move(value);
+      }
+    }
+    return m;
+  }();
+  return connection_string_map;
+}
+} // namespace
+
 std::string get_account_name_from_connection_string()
 {
-  return Azure::Storage::_internal::ParseConnectionString(connection_string).AccountName;
+  return connecetion_string_to_map().at("AccountName");
 }
 
 std::string get_access_key_from_connection_string()
 {
-  return Azure::Storage::_internal::ParseConnectionString(connection_string).AccountKey;
+  return connecetion_string_to_map().at("AccountKey");
 }
 
 std::string get_blob_name(size_t blob_size, int index)
