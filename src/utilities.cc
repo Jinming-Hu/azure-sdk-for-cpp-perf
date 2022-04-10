@@ -103,7 +103,7 @@ void validate_azure_vm()
     Azure::Core::Http::CurlTransportOptions transport_options;
     transport_options.Proxy = "";
     Azure::Core::Http::CurlTransport curl_transport(transport_options);
-    auto response = curl_transport.Send(request, Azure::Core::Context::ApplicationContext);
+    auto response = curl_transport.Send(request, Azure::Core::Context());
     auto response_body_binary = response->GetBody();
     if (response_body_binary.empty())
     {
