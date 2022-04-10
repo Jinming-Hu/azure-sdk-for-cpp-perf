@@ -102,6 +102,10 @@ void validate_azure_vm()
     Azure::Core::Http::CurlTransport curl_transport(transport_options);
     auto response = curl_transport.Send(request, Azure::Core::Context::ApplicationContext);
     auto response_body_binary = response->GetBody();
+    if (response_body_binary.empty())
+    {
+      response_body_binary = response->ExtractBodyStream()->ReadToEnd();
+    }
     std::string json_body(response_body_binary.begin(), response_body_binary.end());
     if (json_body.empty())
     {
