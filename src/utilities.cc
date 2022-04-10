@@ -10,12 +10,14 @@
 #include <cstring>
 #include <exception>
 #include <mutex>
+#include <numeric>
 #include <set>
 #include <thread>
 #include <vector>
 
 #include <azure/core/http/curl_transport.hpp>
 #include <azure/core/http/http.hpp>
+#include <azure/core/internal/cryptography/sha_hash.hpp>
 #include <azure/storage/blobs.hpp>
 #include <azure/storage/common/storage_credential.hpp>
 #include <curl/curl.h>
@@ -225,11 +227,19 @@ logger_raii::logger_raii()
   }
   else
   {
-    Azure::DateTime now(std::chrono::system_clock::now());
-    m_log_filename
-        = now.ToString(
-              Azure::DateTime::DateFormat::Rfc3339, Azure::DateTime::TimeFractionFormat::Truncate)
-        + ".log";
+    const std::string timestamp = Azure::DateTime(std::chrono::system_clock::now())
+                                      .ToString(
+                                          Azure::DateTime::DateFormat::Rfc3339,
+                                          Azure::DateTime::TimeFractionFormat::Truncate);
+    const std::vector<uint8_t> hash = Azure::Core::Cryptography::_internal::Sha256Hash().Final(
+        reinterpret_cast<const uint8_t*>(timestamp.data()), timestamp.length());
+    const std::string hash_hex = std::accumulate(
+        hash.begin(), hash.end(), std::string(), [](const std::string& lhs, uint8_t rhs) {
+          static const char t[16]
+              = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+          return lhs + t[rhs >> 4] + t[rhs & 0x0f];
+        });
+    m_log_filename = timestamp + "-" + hash_hex.substr(0, 7) + ".log";
 
     auto azure_storage_sink = std::make_shared<azure_storage_sink_mt>();
     spdlog::default_logger()->sinks().push_back(azure_storage_sink);
@@ -255,7 +265,7 @@ logger_raii::~logger_raii()
   }
 
   auto blob_container_client
-      = BlobContainerClient::CreateFromConnectionString(log_connection_string, "raw-log");
+      = BlobContainerClient::CreateFromConnectionString(log_connection_string, log_container_name);
   try
   {
     blob_container_client.CreateIfNotExists();
@@ -274,5 +284,5 @@ logger_raii::~logger_raii()
     return;
   }
   azure_storage_sink->m_buffer.clear();
-  spdlog::info("log has been uploaded to azure storage");
+  spdlog::info("log has been uploaded to azure storage {}/{}", log_container_name, m_log_filename);
 }

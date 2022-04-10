@@ -32,6 +32,7 @@ struct libcurl_raii
 
 struct logger_raii
 {
+  constexpr static const char* log_container_name = "raw-log";
   logger_raii();
   ~logger_raii();
   bool should_flush = false;
