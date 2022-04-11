@@ -5,6 +5,7 @@ project(azure-sdk-for-cpp-perf)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake-modules")
 
+find_package(Git REQUIRED)
 include(FetchContent)
 include(automate-vcpkg)
 
