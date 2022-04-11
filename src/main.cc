@@ -108,7 +108,7 @@ int main()
   {
     const auto& c = transfer_configs[i];
     spdlog::info(
-        "tansfer config {}: blob size: {} bytes, number of blobs: {}, concurrency: {}",
+        "transfer config {}: blob size: {} bytes, number of blobs: {}, concurrency: {}",
         i + 1,
         c.blob_size,
         c.num_blobs,
