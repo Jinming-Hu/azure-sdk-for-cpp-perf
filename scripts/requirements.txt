@@ -1,2 +1,8 @@
 numpy
 airium
+azure.identity
+azure.mgmt.storage
+azure.mgmt.compute
+azure.mgmt.network
+azure.storage.blob
+PyGithub
