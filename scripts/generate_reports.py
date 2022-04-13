@@ -150,7 +150,19 @@ def get_azure_vm_info(vm_id):
 
 
 def get_name_for_report(suites):
-    if not (
+    def concatenate_hash_name():
+        logs_filename = [
+            os.path.basename(
+                urllib.parse.unquote(urllib.parse.urlparse(s.log_source).path)
+            )
+            for s in suites
+        ]
+        logs_hash = [
+            re.fullmatch(".+-([0-9a-z]+).log", f).group(1) for f in logs_filename
+        ]
+        return "-".join(logs_hash)
+
+    all_same_version = (
         all(
             suites[i].environment.azure_core_version
             == suites[0].environment.azure_core_version
@@ -166,17 +178,12 @@ def get_name_for_report(suites):
             == suites[0].environment.azure_storage_blobs_version
             for i in range(len(suites))
         )
-    ):
-        logs_filename = [
-            os.path.basename(
-                urllib.parse.unquote(urllib.parse.urlparse(s.log_source).path)
-            )
-            for s in suites
-        ]
-        logs_hash = [
-            re.fullmatch(".+-([0-9a-z]+).log", f).group(0) for f in logs_filename
-        ]
-        return "-".join(logs_hash)
+    )
+    if not all_same_version:
+        return concatenate_hash_name()
+
+    def package_version_name():
+        return f"{suites[0].environment.azure_core_version} {suites[0].environment.azure_storage_common_version} {suites[0].environment.azure_storage_blobs_version}"
 
     @dataclass
     class package_version:
@@ -287,8 +294,10 @@ def get_name_for_report(suites):
             + ("Preview" if consider_beta else "GA")
             + " Release"
         )
+    elif len(suites) == 1:
+        return concatenate_hash_name()
     else:
-        return f"{str(v1)} {str(v2)} {str(v3)}"
+        return package_version_name()
 
 
 get_name_for_report.cached = False
