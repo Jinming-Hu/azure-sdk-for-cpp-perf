@@ -13,12 +13,16 @@ import urllib.parse
 from dataclasses import dataclass, field
 import concurrent.futures
 import airium
+import diskcache
 from github import Github
 import azure.identity
 import azure.mgmt.storage
 import azure.mgmt.compute
 import azure.mgmt.network
 import azure.storage.blob
+
+
+CACHE_DIR = "cache"
 
 
 def size_format(num):
@@ -30,8 +34,9 @@ def size_format(num):
 
 
 def get_storage_account_info(account_name):
-    if account_name in get_storage_account_info.cache:
-        return get_storage_account_info.cache[account_name]
+    CACHE_KEY = "storage_account_info."
+    if v := diskcache.Cache(CACHE_DIR).get(CACHE_KEY + account_name):
+        return v
 
     account_desc = "unknown"
     if "AZURE_SUBSCRIPTION_ID" not in os.environ:
@@ -52,14 +57,15 @@ def get_storage_account_info(account_name):
                     f"cannot find storage account {account_name} under subscription {subscription_id}")
         except azure.identity.CredentialUnavailableError as e:
             logging.warning(e)
-    get_storage_account_info.cache[account_name] = account_desc
+    diskcache.Cache(CACHE_DIR).set(CACHE_KEY + account_name, account_desc)
     return account_desc
 
 
-get_storage_account_info.cache = {}
-
-
 def get_storage_account_key(account_name):
+    CACHE_KEY = "storage_account_key."
+    if v := diskcache.Cache(CACHE_DIR).get(CACHE_KEY + account_name):
+        return v
+
     if "AZURE_SUBSCRIPTION_ID" not in os.environ:
         logging.warning(
             "AZURE_SUBSCRIPTION_ID environment variable not defined")
@@ -77,14 +83,17 @@ def get_storage_account_key(account_name):
                 break
         account_keys = storage_client.storage_accounts.list_keys(
             resource_group, account_name)
-        return account_keys.keys[0].value
+        account_key = account_keys.keys[0].value
+        diskcache.Cache(CACHE_DIR).set(CACHE_KEY + account_name, account_key)
+        return account_key
     except azure.identity.CredentialUnavailableError as e:
         logging.warning(e)
 
 
 def get_azure_vm_info(vm_id):
-    if vm_id in get_azure_vm_info.cache:
-        return get_azure_vm_info.cache[vm_id]
+    CACHE_KEY = "azure_vm_info."
+    if v := diskcache.Cache(CACHE_DIR).get(CACHE_KEY + vm_id):
+        return v
 
     vm_desc = "unknown"
     vm_id_pattern = "/subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachines/(.+)"
@@ -118,11 +127,8 @@ def get_azure_vm_info(vm_id):
     else:
         logging.warning(f"cannot parse vm {vm_id}")
 
-    get_azure_vm_info.cache[vm_id] = vm_desc
+    diskcache.Cache(CACHE_DIR).set(CACHE_KEY + vm_id, vm_desc)
     return vm_desc
-
-
-get_azure_vm_info.cache = {}
 
 
 def get_name_for_report(suites):

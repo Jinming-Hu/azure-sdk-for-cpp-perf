@@ -1,4 +1,5 @@
 numpy
+diskcache
 airium
 azure.identity
 azure.mgmt.storage
