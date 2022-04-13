@@ -4,10 +4,12 @@ import os
 import re
 import sys
 import numpy
-import urllib.parse
+import pathlib
 import logging
 import datetime
 import itertools
+import contextlib
+import urllib.parse
 from dataclasses import dataclass, field
 import concurrent.futures
 import airium
@@ -68,13 +70,13 @@ def get_storage_account_key(account_name):
         credential, subscription_id)
     try:
         for a in storage_client.storage_accounts.list():
-            if a.name == log_account_name:
+            if a.name == account_name:
                 storage_account_id_pattern = "/subscriptions/.+/resourceGroups/(.+)/providers/Microsoft.Storage/storageAccounts/.+"
                 m = re.fullmatch(storage_account_id_pattern, a.id)
                 resource_group = m.group(1)
                 break
         account_keys = storage_client.storage_accounts.list_keys(
-            resource_group, log_account_name)
+            resource_group, account_name)
         return account_keys.keys[0].value
     except azure.identity.CredentialUnavailableError as e:
         logging.warning(e)
@@ -88,7 +90,6 @@ def get_azure_vm_info(vm_id):
     vm_id_pattern = "/subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachines/(.+)"
     nic_id_pattern = "/subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Network/networkInterfaces/(.+)"
     if m := re.fullmatch(vm_id_pattern, vm_id):
-
         (subscription_id, resource_group, vm_name) = m.group(1, 2, 3)
 
         credential = azure.identity.AzureCliCredential()
@@ -125,6 +126,13 @@ get_azure_vm_info.cache = {}
 
 
 def get_name_for_report(suites):
+    if not(all(suites[i].environment.azure_core_version == suites[0].environment.azure_core_version for i in range(len(suites))) and all(suites[i].environment.azure_storage_common_version == suites[0].environment.azure_storage_common_version for i in range(len(suites))) and all(suites[i].environment.azure_storage_blobs_version == suites[0].environment.azure_storage_blobs_version for i in range(len(suites)))):
+        logs_filename = [os.path.basename(urllib.parse.unquote(
+            urllib.parse.urlparse(s.log_source).path)) for s in suites]
+        logs_hash = [re.fullmatch(".+-([0-9a-z]+).log", f).group(0)
+                     for f in logs_filename]
+        return "-".join(logs_hash)
+
     @dataclass
     class package_version:
         name: str
@@ -140,6 +148,13 @@ def get_name_for_report(suites):
         def __lt__(self, other):
             assert(self.name == other.name)
             return (self.major, self.minor, self.patch, self.beta if self.beta != 0 else sys.maxsize) < (other.major, other.minor, other.patch, other.beta if other.beta != 0 else sys.maxsize)
+
+        def __repr__(self):
+            s = f"{self.name}_{self.major}.{self.minor}.{self.patch}"
+            if self.beta == 0:
+                return s
+            else:
+                return f"{s}-beta.{self.beta}"
 
     def parse_package_version(name):
         m = re.fullmatch("(.+)_(\d+).(\d+).(\d+)(-beta.(\d+))?", name)
@@ -202,8 +217,8 @@ def get_name_for_report(suites):
 
     if v1l[v1i][1] <= latest_release_date and (v1i + 1 >= len(v1l) or v1l[v1i+1][1] > latest_release_date) and v2l[v2i][1] <= latest_release_date and (v2i + 1 >= len(v2l) or v2l[v2i+1][1] > latest_release_date) and v3l[v3i][1] <= latest_release_date and (v3i + 1 >= len(v3l) or v3l[v3i+1][1] > latest_release_date):
         return latest_release_date.strftime("%b %Y") + " " + ("Preview" if consider_beta else "GA") + " Release"
-
-    return ""
+    else:
+        return f"{str(v1)} {str(v2)} {str(v3)}"
 
 
 get_name_for_report.cached = False
@@ -328,7 +343,7 @@ def parse_log(content):
 
 def generate_suite_report(a, suite):
     with a.table():
-        with a.tr():
+        with a.thead().tr():
             a.th(_t="")
             a.th(_t="blob size")
             a.th(_t="number of blobs")
@@ -338,52 +353,53 @@ def generate_suite_report(a, suite):
                 a.th(_t=t)
                 a.th(_t="% of baseline")
 
-        last_case_name = None
-        for (c, tc) in itertools.product(suite.benchmark_cases, suite.transfer_configs):
-            with a.tr():
-                if c != last_case_name:
-                    a.td(_t=c, rowspan=len(suite.transfer_configs))
-                    last_case_name = c
-                a.td(_t=size_format(tc.blob_size))
-                a.td(_t=tc.num_blobs)
-                a.td(_t=tc.concurrency)
+        with a.tbody():
+            last_case_name = None
+            for (c, tc) in itertools.product(suite.benchmark_cases, suite.transfer_configs):
+                with a.tr():
+                    if c != last_case_name:
+                        a.td(_t=c, rowspan=len(suite.transfer_configs))
+                        last_case_name = c
+                    a.td(_t=size_format(tc.blob_size))
+                    a.td(_t=tc.num_blobs)
+                    a.td(_t=tc.concurrency)
 
-                tc_total_size = tc.blob_size * tc.num_blobs
+                    tc_total_size = tc.blob_size * tc.num_blobs
 
-                filtered_results = list(filter(lambda r: r.case_name == c and
-                                               r.transfer_config.blob_size == tc.blob_size and
-                                               r.transfer_config.num_blobs == tc.num_blobs and
-                                               r.transfer_config.concurrency, suite.cases))
-                baseline_time = list(filter(
-                    lambda r: r.transport == suite.baseline_transport, filtered_results))[0].total_time_ms
-                baseline_avg_time = numpy.mean(
-                    sorted(baseline_time)[1:-1])
-                baseline_cv = numpy.std(
-                    baseline_time) / numpy.mean(baseline_time)
-                baseline_speed = tc_total_size / baseline_avg_time * 1000
-
-                td_title = ", ".join(
-                    [str(i) + "ms" for i in baseline_time]) + "; " + f"{baseline_cv:.3f}"
-                td_data = size_format(baseline_speed) + "/s"
-                if baseline_cv > 0.3:
-                    td_data += "*"
-                a.td(_t=td_data, title=td_title)
-
-                for r in filter(lambda r: r.transport != suite.baseline_transport, filtered_results):
-                    avg_time = numpy.mean(
-                        sorted(r.total_time_ms)[1:-1])
-                    cv = numpy.std(r.total_time_ms) / \
-                        numpy.mean(r.total_time_ms)
-                    speed = tc_total_size / avg_time * 1000
-                    percent = speed/baseline_speed * 100
+                    filtered_results = list(filter(lambda r: r.case_name == c and
+                                                   r.transfer_config.blob_size == tc.blob_size and
+                                                   r.transfer_config.num_blobs == tc.num_blobs and
+                                                   r.transfer_config.concurrency, suite.cases))
+                    baseline_time = list(filter(
+                        lambda r: r.transport == suite.baseline_transport, filtered_results))[0].total_time_ms
+                    baseline_avg_time = numpy.mean(
+                        sorted(baseline_time)[1:-1])
+                    baseline_cv = numpy.std(
+                        baseline_time) / numpy.mean(baseline_time)
+                    baseline_speed = tc_total_size / baseline_avg_time * 1000
 
                     td_title = ", ".join(
-                        [str(i) + "ms" for i in r.total_time_ms]) + "; " + f"{cv:.3f}"
-                    td_data = size_format(speed) + "/s"
-                    if cv > 0.3:
+                        [str(i) + "ms" for i in baseline_time]) + "; " + f"{baseline_cv:.3f}"
+                    td_data = size_format(baseline_speed) + "/s"
+                    if baseline_cv > 0.3:
                         td_data += "*"
                     a.td(_t=td_data, title=td_title)
-                    a.td(_t=f"{percent:.1f}" + "%")
+
+                    for r in filter(lambda r: r.transport != suite.baseline_transport, filtered_results):
+                        avg_time = numpy.mean(
+                            sorted(r.total_time_ms)[1:-1])
+                        cv = numpy.std(r.total_time_ms) / \
+                            numpy.mean(r.total_time_ms)
+                        speed = tc_total_size / avg_time * 1000
+                        percent = speed/baseline_speed * 100
+
+                        td_title = ", ".join(
+                            [str(i) + "ms" for i in r.total_time_ms]) + "; " + f"{cv:.3f}"
+                        td_data = size_format(speed) + "/s"
+                        if cv > 0.3:
+                            td_data += "*"
+                        a.td(_t=td_data, title=td_title)
+                        a.td(_t=f"{percent:.1f}" + "%")
     with a.ul():
         a.li(
             _t=f"Azure Storage account: {suite.environment.storage_account}")
@@ -402,22 +418,44 @@ def generate_suite_report(a, suite):
             a.a(href=suite.log_source, _t=logname)
 
 
-def generate_suites_report(suites):
-    a = airium.Airium()
+@contextlib.contextmanager
+def basic_html_body(a, title):
     a("<!DOCTYPE html>")
     with a.html(lang="en"):
         with a.head():
             a.meta(charset="utf-8")
-            a.title(_t="Benchmarking Report")
+            a.title(_t=title)
             a.link(href="/styles/table.css", rel="stylesheet", type="text/css")
         with a.body():
-            for s in suites:
-                generate_suite_report(a, s)
-                if s != suites[-1]:
-                    a.br()
-                    a.hr()
-                    a.br()
+            yield
+
+
+def generate_suites_report(suites):
+    a = airium.Airium()
+    with basic_html_body(a, "Benchmarking Report"):
+        for s in suites:
+            generate_suite_report(a, s)
+            if s != suites[-1]:
+                a.br()
+                a.hr()
+                a.br()
     return bytes(a)
+
+
+def publish_report(container_client, blob_name, content):
+    logging.info(f"publishing report to {blob_name}")
+    if "DRY_RUN" in os.environ and os.environ["DRY_RUN"].upper() in ["TRUE", "ON", "1", "YES"]:
+        dirname = os.path.dirname(blob_name)
+        if dirname:
+            pathlib.Path(dirname).mkdir(parents=True, exist_ok=True)
+        with open(blob_name, "wb") as f:
+            f.write(content)
+        return
+    html_content_settings = azure.storage.blob.ContentSettings(
+        content_type="text/html")
+    blob_client = container_client.get_blob_client(blob_name)
+    blob_client.upload_blob(
+        content, content_settings=html_content_settings, overwrite=True)
 
 
 if __name__ == "__main__":
@@ -467,30 +505,16 @@ if __name__ == "__main__":
         report_container_client = blob_service_client.get_container_client(
             "$web")
 
-        html_content_settings = azure.storage.blob.ContentSettings(
-            content_type="text/html")
         i = airium.Airium()
-        i("<!DOCTYPE html>")
-        with i.html(lang="en"):
-            with i.head():
-                i.meta(charset="utf-8")
-                i.title(_t="Azure Storage C++ SDK Benchmarking Reports")
-                i.link(href="/styles/table.css",
-                       rel="stylesheet", type="text/css")
-            with i.body():
-                for g in suite_groups:
-                    report_name = get_name_for_report(g)
-                    assert(len(report_name) != 0)
-                    report_filename = "reports/" + \
-                        report_name.replace(" ", "_") + ".html"
-                    i.a(_t=report_name, href=report_filename)
-                    i.br()
-                    blob_client = report_container_client.get_blob_client(
-                        report_filename)
-                    blob_client.upload_blob(generate_suites_report(
-                        g), content_settings=html_content_settings, overwrite=True)
+        with basic_html_body(i, "Azure Storage C++ SDK Benchmarking Reports"):
+            for g in suite_groups:
+                report_name = get_name_for_report(g)
+                assert(len(report_name) != 0)
+                report_filename = "reports/" + \
+                    report_name.replace(" ", "_") + ".html"
+                report_content = generate_suites_report(g)
+                publish_report(report_container_client,
+                               report_filename, report_content)
+                i.a(_t=report_name, href=report_filename).br()
 
-        index_blob_client = report_container_client.get_blob_client(
-            "index.html")
-        index_blob_client.upload_blob(
-            bytes(i), content_settings=html_content_settings, overwrite=True)
+        publish_report(report_container_client, "index.html", bytes(i))
