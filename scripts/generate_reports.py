@@ -23,6 +23,11 @@ import azure.storage.blob
 
 
 CACHE_DIR = "cache"
+STORAGE_ACCOUNT_ID_PATTERN = "/subscriptions/.+/resourceGroups/(.+)/providers/Microsoft.Storage/storageAccounts/.+"
+VM_ID_PATTERN = "/subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachines/(.+)"
+NIC_ID_PATTERN = "/subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Network/networkInterfaces/(.+)"
+ENV_AZ_SUB_ID = "AZURE_SUBSCRIPTION_ID"
+ENV_DRY_RUN = "DRY_RUN"
 
 
 def size_format(num):
@@ -39,10 +44,10 @@ def get_storage_account_info(account_name):
         return v
 
     account_desc = "unknown"
-    if "AZURE_SUBSCRIPTION_ID" not in os.environ:
-        logging.warning("AZURE_SUBSCRIPTION_ID environment variable not defined")
+    if ENV_AZ_SUB_ID not in os.environ:
+        logging.warning(f"{ENV_AZ_SUB_ID} environment variable not defined")
     else:
-        subscription_id = os.environ["AZURE_SUBSCRIPTION_ID"]
+        subscription_id = os.environ[ENV_AZ_SUB_ID]
         credential = azure.identity.AzureCliCredential()
         storage_client = azure.mgmt.storage.StorageManagementClient(
             credential, subscription_id
@@ -67,10 +72,10 @@ def get_storage_account_key(account_name):
     if v := diskcache.Cache(CACHE_DIR).get(CACHE_KEY + account_name):
         return v
 
-    if "AZURE_SUBSCRIPTION_ID" not in os.environ:
-        logging.warning("AZURE_SUBSCRIPTION_ID environment variable not defined")
+    if ENV_AZ_SUB_ID not in os.environ:
+        logging.warning(f"{ENV_AZ_SUB_ID} environment variable not defined")
         return
-    subscription_id = os.environ["AZURE_SUBSCRIPTION_ID"]
+    subscription_id = os.environ[ENV_AZ_SUB_ID]
     credential = azure.identity.AzureCliCredential()
     storage_client = azure.mgmt.storage.StorageManagementClient(
         credential, subscription_id
@@ -78,8 +83,7 @@ def get_storage_account_key(account_name):
     try:
         for a in storage_client.storage_accounts.list():
             if a.name == account_name:
-                storage_account_id_pattern = "/subscriptions/.+/resourceGroups/(.+)/providers/Microsoft.Storage/storageAccounts/.+"
-                m = re.fullmatch(storage_account_id_pattern, a.id)
+                m = re.fullmatch(STORAGE_ACCOUNT_ID_PATTERN, a.id)
                 resource_group = m.group(1)
                 break
         account_keys = storage_client.storage_accounts.list_keys(
@@ -98,9 +102,7 @@ def get_azure_vm_info(vm_id):
         return v
 
     vm_desc = "unknown"
-    vm_id_pattern = "/subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachines/(.+)"
-    nic_id_pattern = "/subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Network/networkInterfaces/(.+)"
-    if m := re.fullmatch(vm_id_pattern, vm_id):
+    if m := re.fullmatch(VM_ID_PATTERN, vm_id):
         (subscription_id, resource_group, vm_name) = m.group(1, 2, 3)
 
         credential = azure.identity.AzureCliCredential()
@@ -119,7 +121,7 @@ def get_azure_vm_info(vm_id):
             and len(vm_info.network_profile.network_interfaces) == 1
             and (
                 m := re.fullmatch(
-                    nic_id_pattern, vm_info.network_profile.network_interfaces[0].id
+                    NIC_ID_PATTERN, vm_info.network_profile.network_interfaces[0].id
                 )
             )
         ):
@@ -548,7 +550,7 @@ def generate_suites_report(suites):
 
 def publish_report(container_client, blob_name, content):
     logging.info(f"publishing report to {blob_name}")
-    if "DRY_RUN" in os.environ and os.environ["DRY_RUN"].upper() in [
+    if ENV_DRY_RUN in os.environ and os.environ[ENV_DRY_RUN].upper() in [
         "TRUE",
         "ON",
         "1",
