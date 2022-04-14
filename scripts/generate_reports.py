@@ -627,12 +627,14 @@ def publish_report(container_client, blob_name, content):
     content_md5 = hashlib.md5(content).digest()
 
     blob_client = container_client.get_blob_client(blob_name)
+    try:
+        blob_properties = blob_client.get_blob_properties()
+        blob_exists = True
+    except azure.core.exceptions.ResourceNotFoundError:
+        blob_exists = False
+
     blob_exists = blob_client.exists()
-    if (
-        blob_exists
-        and blob_client.get_blob_properties().content_settings.content_md5
-        == content_md5
-    ):
+    if blob_exists and blob_properties.content_settings.content_md5 == content_md5:
         return
 
     logger.info(f"publishing report to {blob_name}")
