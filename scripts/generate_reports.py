@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import io
 import re
 import sys
 import numpy
@@ -8,6 +9,7 @@ import hashlib
 import pathlib
 import logging
 import datetime
+import threading
 import itertools
 import contextlib
 import urllib.parse
@@ -15,6 +17,7 @@ from dataclasses import dataclass, field
 import concurrent.futures
 import airium
 import diskcache
+import dill as pickle
 from github import Github
 import azure.identity
 import azure.mgmt.storage
@@ -162,6 +165,8 @@ class report_meta:
 
 
 def get_report_meta(suites):
+    CACHE_KEY = "github/azure-sdk-for-cpp/tags."
+
     def concatenate_hash_name():
         logs_filename = [
             os.path.basename(
@@ -248,34 +253,53 @@ def get_report_meta(suites):
             v.beta = int(m.group(6))
         return v
 
-    if not get_report_meta.cached:
-        azcppsdk_repo = "Azure/azure-sdk-for-cpp"
-        g = Github()
-        repo = g.get_repo(azcppsdk_repo)
-        get_report_meta.azure_core_versions = []
-        get_report_meta.azure_storage_common_versions = []
-        get_report_meta.azure_storage_blobs_versions = []
-        for t in repo.get_releases():
-            v = parse_package_version(t.tag_name)
-            d = t.published_at
-            d = d + datetime.timedelta(days=3)
-            d = d.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            if v.name == "azure-core":
-                get_report_meta.azure_core_versions.append((v, d))
-            elif v.name == "azure-storage-common":
-                get_report_meta.azure_storage_common_versions.append((v, d))
-            elif v.name == "azure-storage-blobs":
-                get_report_meta.azure_storage_blobs_versions.append((v, d))
-        get_report_meta.azure_core_versions.sort()
-        l = get_report_meta.azure_core_versions
-        assert all(l[i][1] <= l[i + 1][1] for i in range(len(l) - 1))
-        get_report_meta.azure_storage_common_versions.sort()
-        l = get_report_meta.azure_storage_common_versions
-        assert all(l[i][1] <= l[i + 1][1] for i in range(len(l) - 1))
-        get_report_meta.azure_storage_blobs_versions.sort()
-        l = get_report_meta.azure_storage_blobs_versions
-        assert all(l[i][1] <= l[i + 1][1] for i in range(len(l) - 1))
-        get_report_meta.cached = True
+    if not diskcache.Cache(CACHE_DIR).get(CACHE_KEY + "cached"):
+        with get_report_meta.lock:
+            if not diskcache.Cache(CACHE_DIR).get(CACHE_KEY + "cached"):
+                azcppsdk_repo = "Azure/azure-sdk-for-cpp"
+                g = Github()
+                repo = g.get_repo(azcppsdk_repo)
+                azure_core_versions = []
+                azure_storage_common_versions = []
+                azure_storage_blobs_versions = []
+                for t in repo.get_releases():
+                    v = parse_package_version(t.tag_name)
+                    d = t.published_at
+                    d = d + datetime.timedelta(days=3)
+                    d = d.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                    if v.name == "azure-core":
+                        azure_core_versions.append((v, d))
+                    elif v.name == "azure-storage-common":
+                        azure_storage_common_versions.append((v, d))
+                    elif v.name == "azure-storage-blobs":
+                        azure_storage_blobs_versions.append((v, d))
+                azure_core_versions.sort()
+                azure_storage_common_versions.sort()
+                azure_storage_blobs_versions.sort()
+
+                l = azure_core_versions
+                assert all(l[i][1] <= l[i + 1][1] for i in range(len(l) - 1))
+                bytes_io1 = io.BytesIO()
+                pickle.dump(l, bytes_io1)
+                bytes_io1.seek(0)
+
+                l = azure_storage_common_versions
+                assert all(l[i][1] <= l[i + 1][1] for i in range(len(l) - 1))
+                bytes_io2 = io.BytesIO()
+                pickle.dump(l, bytes_io2)
+                bytes_io2.seek(0)
+
+                l = azure_storage_blobs_versions
+                assert all(l[i][1] <= l[i + 1][1] for i in range(len(l) - 1))
+                bytes_io3 = io.BytesIO()
+                pickle.dump(l, bytes_io3)
+                bytes_io3.seek(0)
+
+                with diskcache.Cache(CACHE_DIR) as c:
+                    c.set(CACHE_KEY + "azure_core_versions", bytes_io1)
+                    c.set(CACHE_KEY + "azure_storage_common_versions", bytes_io2)
+                    c.set(CACHE_KEY + "azure_storage_blobs_versions", bytes_io3)
+                    c.set(CACHE_KEY + "cached", True)
 
     v1 = parse_package_version(suites[0].environment.azure_core_version)
     v2 = parse_package_version(suites[0].environment.azure_storage_common_version)
@@ -284,9 +308,10 @@ def get_report_meta(suites):
     package_version_parsed = v1 and v2 and v3
 
     if package_version_parsed:
-        v1l = get_report_meta.azure_core_versions
-        v2l = get_report_meta.azure_storage_common_versions
-        v3l = get_report_meta.azure_storage_blobs_versions
+        with diskcache.Cache(CACHE_DIR) as c:
+            v1l = pickle.load(c.get(CACHE_KEY + "azure_core_versions"))
+            v2l = pickle.load(c.get(CACHE_KEY + "azure_storage_common_versions"))
+            v3l = pickle.load(c.get(CACHE_KEY + "azure_storage_blobs_versions"))
         consider_beta = any(v.beta != 0 for v in [v1, v2, v3])
         if not consider_beta:
             v1l = list(filter(lambda i: i[0].beta == 0, v1l))
@@ -327,7 +352,7 @@ def get_report_meta(suites):
         return report_meta(concatenate_hash_name(), False, suites[0].start_time)
 
 
-get_report_meta.cached = False
+get_report_meta.lock = threading.Lock()
 
 
 @dataclass
@@ -675,16 +700,17 @@ if __name__ == "__main__":
             return "reports/" + meta.name.replace(" ", "_") + ".html"
 
         report_container_client = blob_service_client.get_container_client("$web")
-        reports_meta = []
-        for g in suite_groups:
-            meta = get_report_meta(g)
-            content = generate_suites_report(g)
-            publish_report(
-                report_container_client,
-                get_report_filename(meta),
-                content,
+
+        def process_suite_group(suite_group):
+            meta = get_report_meta(suite_group)
+            content = generate_suites_report(suite_group)
+            publish_report(report_container_client, get_report_filename(meta), content)
+            return meta
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+            reports_meta = list(
+                executor.map(lambda g: process_suite_group(g), suite_groups)
             )
-            reports_meta.append(meta)
 
         i = airium.Airium()
         with basic_html_body(i, "Azure Storage C++ SDK Benchmarking Reports"):
