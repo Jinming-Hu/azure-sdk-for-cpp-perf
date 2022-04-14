@@ -30,6 +30,10 @@ NIC_ID_PATTERN = "/subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Ne
 ENV_AZ_SUB_ID = "AZURE_SUBSCRIPTION_ID"
 ENV_DRY_RUN = "DRY_RUN"
 
+logging.basicConfig(level=logging.ERROR)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 
 def size_format(num):
     for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:
@@ -46,7 +50,7 @@ def get_storage_account_info(account_name):
 
     account_desc = "unknown"
     if ENV_AZ_SUB_ID not in os.environ:
-        logging.warning(f"{ENV_AZ_SUB_ID} environment variable not defined")
+        logger.warning(f"{ENV_AZ_SUB_ID} environment variable not defined")
     else:
         subscription_id = os.environ[ENV_AZ_SUB_ID]
         credential = azure.identity.AzureCliCredential()
@@ -59,11 +63,11 @@ def get_storage_account_info(account_name):
                     account_desc = f"{a.sku.name}, {a.kind}, {a.location}"
                     break
             else:
-                logging.warning(
+                logger.warning(
                     f"cannot find storage account {account_name} under subscription {subscription_id}"
                 )
         except azure.identity.CredentialUnavailableError as e:
-            logging.warning(e)
+            logger.warning(e)
     diskcache.Cache(CACHE_DIR).set(CACHE_KEY + account_name, account_desc)
     return account_desc
 
@@ -74,7 +78,7 @@ def get_storage_account_key(account_name):
         return v
 
     if ENV_AZ_SUB_ID not in os.environ:
-        logging.warning(f"{ENV_AZ_SUB_ID} environment variable not defined")
+        logger.warning(f"{ENV_AZ_SUB_ID} environment variable not defined")
         return
     subscription_id = os.environ[ENV_AZ_SUB_ID]
     credential = azure.identity.AzureCliCredential()
@@ -94,7 +98,7 @@ def get_storage_account_key(account_name):
         diskcache.Cache(CACHE_DIR).set(CACHE_KEY + account_name, account_key)
         return account_key
     except azure.identity.CredentialUnavailableError as e:
-        logging.warning(e)
+        logger.warning(e)
 
 
 def get_azure_vm_info(vm_id):
@@ -113,7 +117,7 @@ def get_azure_vm_info(vm_id):
         try:
             vm_info = compute_client.virtual_machines.get(resource_group, vm_name)
         except azure.identity.CredentialUnavailableError as e:
-            logging.warning(e)
+            logger.warning(e)
             vm_info = None
 
         nic_desc = "status unknown"
@@ -140,11 +144,11 @@ def get_azure_vm_info(vm_id):
                     else "not enabled"
                 )
             except azure.identity.CredentialUnavailableError as e:
-                logging.warning(e)
+                logger.warning(e)
 
         vm_desc = f"{vm_info.hardware_profile.vm_size}, {vm_info.location}, accelerated networking {nic_desc}"
     else:
-        logging.warning(f"cannot parse vm {vm_id}")
+        logger.warning(f"cannot parse vm {vm_id}")
 
     diskcache.Cache(CACHE_DIR).set(CACHE_KEY + vm_id, vm_desc)
     return vm_desc
@@ -606,7 +610,7 @@ def publish_report(container_client, blob_name, content):
     ):
         return
 
-    logging.info(f"publishing report to {blob_name}")
+    logger.info(f"publishing report to {blob_name}")
     if not dry_run:
         content_settings = azure.storage.blob.ContentSettings(
             content_type="text/html", content_md5=content_md5
@@ -617,13 +621,12 @@ def publish_report(container_client, blob_name, content):
 
 
 if __name__ == "__main__":
-    logging.getLogger().setLevel(logging.INFO)
     if len(sys.argv) == 2:
         report_filename = "reports.html"
         suite = parse_log(open(sys.argv[1]).read())
         with open(report_filename, "w") as f:
             f.write(generate_suites_report(suite))
-        logging.info(f"saved to {report_filename}")
+        logger.info(f"saved to {report_filename}")
     elif len(sys.argv) == 1:
         log_account_name = "azsdkcpp"
         raw_log_contianer_name = "raw-log"
@@ -638,7 +641,7 @@ if __name__ == "__main__":
             raw_log_contianer_name
         )
         if not raw_log_container_client.exists():
-            logging.warning(
+            logger.warning(
                 f"{raw_log_contianer_name} container doesn't exist in storage account {log_account_name}"
             )
             exit(1)
