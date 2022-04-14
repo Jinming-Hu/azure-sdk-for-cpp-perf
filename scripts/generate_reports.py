@@ -643,7 +643,7 @@ def publish_report(container_client, blob_name, content):
             content_type="text/html", content_md5=content_md5
         )
         blob_client.upload_blob(
-            content, content_settings=html_content_settings, overwrite=True
+            content, content_settings=content_settings, overwrite=True
         )
 
 
