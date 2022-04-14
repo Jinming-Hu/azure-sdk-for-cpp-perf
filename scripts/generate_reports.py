@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import numpy
+import hashlib
 import pathlib
 import logging
 import datetime
@@ -149,7 +150,14 @@ def get_azure_vm_info(vm_id):
     return vm_desc
 
 
-def get_name_for_report(suites):
+@dataclass
+class report_meta:
+    name: str
+    is_release: bool
+    sort_key: datetime.datetime
+
+
+def get_report_meta(suites):
     def concatenate_hash_name():
         logs_filename = [
             os.path.basename(
@@ -180,7 +188,9 @@ def get_name_for_report(suites):
         )
     )
     if not all_same_version:
-        return concatenate_hash_name()
+        return report_meta(
+            concatenate_hash_name(), False, max([s.start_time for s in suites])
+        )
 
     def package_version_name():
         return f"{suites[0].environment.azure_core_version} {suites[0].environment.azure_storage_common_version} {suites[0].environment.azure_storage_blobs_version}"
@@ -225,6 +235,8 @@ def get_name_for_report(suites):
 
     def parse_package_version(name):
         m = re.fullmatch("(.+)_(\\d+).(\\d+).(\\d+)(-beta.(\\d+))?", name)
+        if m is None:
+            return None
         v = package_version(
             m.group(1), int(m.group(2)), int(m.group(3)), int(m.group(4)), 0
         )
@@ -232,75 +244,86 @@ def get_name_for_report(suites):
             v.beta = int(m.group(6))
         return v
 
-    if not get_name_for_report.cached:
+    if not get_report_meta.cached:
         azcppsdk_repo = "Azure/azure-sdk-for-cpp"
         g = Github()
         repo = g.get_repo(azcppsdk_repo)
-        get_name_for_report.azure_core_versions = []
-        get_name_for_report.azure_storage_common_versions = []
-        get_name_for_report.azure_storage_blobs_versions = []
+        get_report_meta.azure_core_versions = []
+        get_report_meta.azure_storage_common_versions = []
+        get_report_meta.azure_storage_blobs_versions = []
         for t in repo.get_releases():
             v = parse_package_version(t.tag_name)
             d = t.published_at
             d = d + datetime.timedelta(days=3)
             d = d.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             if v.name == "azure-core":
-                get_name_for_report.azure_core_versions.append((v, d))
+                get_report_meta.azure_core_versions.append((v, d))
             elif v.name == "azure-storage-common":
-                get_name_for_report.azure_storage_common_versions.append((v, d))
+                get_report_meta.azure_storage_common_versions.append((v, d))
             elif v.name == "azure-storage-blobs":
-                get_name_for_report.azure_storage_blobs_versions.append((v, d))
-        get_name_for_report.azure_core_versions.sort()
-        l = get_name_for_report.azure_core_versions
+                get_report_meta.azure_storage_blobs_versions.append((v, d))
+        get_report_meta.azure_core_versions.sort()
+        l = get_report_meta.azure_core_versions
         assert all(l[i][1] <= l[i + 1][1] for i in range(len(l) - 1))
-        get_name_for_report.azure_storage_common_versions.sort()
-        l = get_name_for_report.azure_storage_common_versions
+        get_report_meta.azure_storage_common_versions.sort()
+        l = get_report_meta.azure_storage_common_versions
         assert all(l[i][1] <= l[i + 1][1] for i in range(len(l) - 1))
-        get_name_for_report.azure_storage_blobs_versions.sort()
-        l = get_name_for_report.azure_storage_blobs_versions
+        get_report_meta.azure_storage_blobs_versions.sort()
+        l = get_report_meta.azure_storage_blobs_versions
         assert all(l[i][1] <= l[i + 1][1] for i in range(len(l) - 1))
-        get_name_for_report.cached = True
+        get_report_meta.cached = True
 
     v1 = parse_package_version(suites[0].environment.azure_core_version)
     v2 = parse_package_version(suites[0].environment.azure_storage_common_version)
     v3 = parse_package_version(suites[0].environment.azure_storage_blobs_version)
 
-    v1l = get_name_for_report.azure_core_versions
-    v2l = get_name_for_report.azure_storage_common_versions
-    v3l = get_name_for_report.azure_storage_blobs_versions
-    consider_beta = any(v.beta != 0 for v in [v1, v2, v3])
-    if not consider_beta:
-        v1l = list(filter(lambda i: i[0].beta == 0, v1l))
-        v2l = list(filter(lambda i: i[0].beta == 0, v2l))
-        v3l = list(filter(lambda i: i[0].beta == 0, v3l))
+    package_version_parsed = v1 and v2 and v3
 
-    v1i = next(i for i, v in enumerate(v1l) if v[0] == v1)
-    v2i = next(i for i, v in enumerate(v2l) if v[0] == v2)
-    v3i = next(i for i, v in enumerate(v3l) if v[0] == v3)
+    if package_version_parsed:
+        v1l = get_report_meta.azure_core_versions
+        v2l = get_report_meta.azure_storage_common_versions
+        v3l = get_report_meta.azure_storage_blobs_versions
+        consider_beta = any(v.beta != 0 for v in [v1, v2, v3])
+        if not consider_beta:
+            v1l = list(filter(lambda i: i[0].beta == 0, v1l))
+            v2l = list(filter(lambda i: i[0].beta == 0, v2l))
+            v3l = list(filter(lambda i: i[0].beta == 0, v3l))
 
-    latest_release_date = max([v1l[v1i][1], v2l[v2i][1], v3l[v3i][1]])
+        v1i = next(i for i, v in enumerate(v1l) if v[0] == v1)
+        v2i = next(i for i, v in enumerate(v2l) if v[0] == v2)
+        v3i = next(i for i, v in enumerate(v3l) if v[0] == v3)
 
-    if (
-        v1l[v1i][1] <= latest_release_date
-        and (v1i + 1 >= len(v1l) or v1l[v1i + 1][1] > latest_release_date)
-        and v2l[v2i][1] <= latest_release_date
-        and (v2i + 1 >= len(v2l) or v2l[v2i + 1][1] > latest_release_date)
-        and v3l[v3i][1] <= latest_release_date
-        and (v3i + 1 >= len(v3l) or v3l[v3i + 1][1] > latest_release_date)
-    ):
-        return (
+        latest_release_date = max([v1l[v1i][1], v2l[v2i][1], v3l[v3i][1]])
+
+        is_release = (
+            v1l[v1i][1] <= latest_release_date
+            and (v1i + 1 >= len(v1l) or v1l[v1i + 1][1] > latest_release_date)
+            and v2l[v2i][1] <= latest_release_date
+            and (v2i + 1 >= len(v2l) or v2l[v2i + 1][1] > latest_release_date)
+            and v3l[v3i][1] <= latest_release_date
+            and (v3i + 1 >= len(v3l) or v3l[v3i + 1][1] > latest_release_date)
+        )
+    else:
+        is_release = False
+
+    if is_release:
+        return report_meta(
             latest_release_date.strftime("%b %Y")
             + " "
             + ("Preview" if consider_beta else "GA")
-            + " Release"
+            + " Release",
+            True,
+            latest_release_date,
         )
-    elif len(suites) == 1:
-        return concatenate_hash_name()
+    elif package_version_parsed and len(suites) > 1:
+        return report_meta(
+            package_version_name(), False, max([s.start_time for s in suites])
+        )
     else:
-        return package_version_name()
+        return report_meta(concatenate_hash_name(), False, suites[0].start_time)
 
 
-get_name_for_report.cached = False
+get_report_meta.cached = False
 
 
 @dataclass
@@ -558,24 +581,39 @@ def generate_suites_report(suites):
 
 
 def publish_report(container_client, blob_name, content):
-    logging.info(f"publishing report to {blob_name}")
-    if ENV_DRY_RUN in os.environ and os.environ[ENV_DRY_RUN].upper() in [
+    dry_run = ENV_DRY_RUN in os.environ and os.environ[ENV_DRY_RUN].upper() in [
         "TRUE",
         "ON",
         "1",
         "YES",
-    ]:
+    ]
+
+    if dry_run:
         dirname = os.path.dirname(blob_name)
         if dirname:
             pathlib.Path(dirname).mkdir(parents=True, exist_ok=True)
         with open(blob_name, "wb") as f:
             f.write(content)
-        return
-    html_content_settings = azure.storage.blob.ContentSettings(content_type="text/html")
+
+    content_md5 = hashlib.md5(content).digest()
+
     blob_client = container_client.get_blob_client(blob_name)
-    blob_client.upload_blob(
-        content, content_settings=html_content_settings, overwrite=True
-    )
+    blob_exists = blob_client.exists()
+    if (
+        blob_exists
+        and blob_client.get_blob_properties().content_settings.content_md5
+        == content_md5
+    ):
+        return
+
+    logging.info(f"publishing report to {blob_name}")
+    if not dry_run:
+        content_settings = azure.storage.blob.ContentSettings(
+            content_type="text/html", content_md5=content_md5
+        )
+        blob_client.upload_blob(
+            content, content_settings=html_content_settings, overwrite=True
+        )
 
 
 if __name__ == "__main__":
@@ -628,16 +666,35 @@ if __name__ == "__main__":
             list(itertools.compress(suites, numpy.array(suites_pj) == i))
             for i in set(suites_pj)
         ]
+
+        def get_report_filename(meta):
+            assert len(meta.name) != 0
+            return "reports/" + meta.name.replace(" ", "_") + ".html"
+
         report_container_client = blob_service_client.get_container_client("$web")
+        reports_meta = []
+        for g in suite_groups:
+            meta = get_report_meta(g)
+            content = generate_suites_report(g)
+            publish_report(
+                report_container_client,
+                get_report_filename(meta),
+                content,
+            )
+            reports_meta.append(meta)
 
         i = airium.Airium()
         with basic_html_body(i, "Azure Storage C++ SDK Benchmarking Reports"):
-            for g in suite_groups:
-                report_name = get_name_for_report(g)
-                assert len(report_name) != 0
-                report_filename = "reports/" + report_name.replace(" ", "_") + ".html"
-                report_content = generate_suites_report(g)
-                publish_report(report_container_client, report_filename, report_content)
-                i.a(_t=report_name, href=report_filename).br()
+            release_reports = list(filter(lambda r: r.is_release, reports_meta))
+            release_reports.sort(key=lambda r: r.sort_key, reverse=True)
+            for r in release_reports:
+                i.a(_t=r.name, href=get_report_filename(r)).br()
+            i.br()
+            i.hr()
+            i.br()
+            non_release_reports = list(filter(lambda r: not r.is_release, reports_meta))
+            non_release_reports.sort(key=lambda r: r.sort_key, reverse=True)
+            for r in non_release_reports:
+                i.a(_t=r.name, href=get_report_filename(r)).br()
 
         publish_report(report_container_client, "index.html", bytes(i))
