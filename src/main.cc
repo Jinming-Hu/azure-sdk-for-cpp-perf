@@ -33,16 +33,17 @@ void perform(const std::vector<benchmark_case>& benchmark_cases)
   for (auto i : task_order)
   {
     auto casei = benchmark_cases[i];
+    int n_trial = 1;
     while (true)
     {
       auto transfer_result = (*casei.func)(*casei.transport, casei.transfer_config);
       if (transfer_result.exception_observed)
       {
+        const int sleep_seconds = exception_sleep_seconds * (1 >> std::min(n_trial - 1, 3));
         spdlog::warn(
-            "exception observed with {}, sleep {} seconds",
-            casei.transport->name,
-            exception_sleep_seconds);
-        std::this_thread::sleep_for(std::chrono::seconds(exception_sleep_seconds));
+            "exception observed with {}, sleep {} seconds", casei.transport->name, sleep_seconds);
+        std::this_thread::sleep_for(std::chrono::seconds(sleep_seconds));
+        ++n_trial;
         continue;
       }
       spdlog::info(
