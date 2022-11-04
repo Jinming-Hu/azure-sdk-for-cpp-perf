@@ -10,7 +10,12 @@ include(FetchContent)
 include(automate-vcpkg)
 
 vcpkg_bootstrap()
-vcpkg_install_packages(curl spdlog nlohmann-json cryptopp wil)
+vcpkg_install_packages(curl spdlog nlohmann-json cryptopp)
+if(WIN32)
+  vcpkg_install_packages(wil)
+else()
+  vcpkg_install_packages(libxml2)
+endif()
 
 FetchContent_Declare(
   azure-core
