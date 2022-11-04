@@ -10,20 +10,20 @@ include(FetchContent)
 include(automate-vcpkg)
 
 vcpkg_bootstrap()
-vcpkg_install_packages(libxml2 curl spdlog nlohmann-json cryptopp)
+vcpkg_install_packages(curl spdlog nlohmann-json cryptopp wil)
 
 FetchContent_Declare(
   azure-core
   GIT_REPOSITORY https://github.com/Azure/azure-sdk-for-cpp.git
-  GIT_TAG azure-core_1.5.0)
+  GIT_TAG azure-core_1.8.0-beta.2)
 FetchContent_Declare(
   azure-storage-common
   GIT_REPOSITORY https://github.com/Azure/azure-sdk-for-cpp.git
-  GIT_TAG azure-storage-common_12.2.3)
+  GIT_TAG azure-storage-common_12.3.0)
 FetchContent_Declare(
   azure-storage-blobs
   GIT_REPOSITORY https://github.com/Azure/azure-sdk-for-cpp.git
-  GIT_TAG azure-storage-blobs_12.4.0)
+  GIT_TAG azure-storage-blobs_12.6.2)
 
 function(get_dependency_git_version source_directory tag_pattern
          dependency_git_version)
